@@ -229,7 +229,7 @@ pub fn fps_controller_look(mut query: Query<(&mut FpsController, &FpsControllerI
 
 pub fn fps_controller_move(
     time: Res<Time>,
-    physics_context: ReadDefaultRapierContext,
+    physics_context: ReadRapierContext,
     mut query: Query<(
         Entity,
         &FpsControllerInput,
@@ -275,7 +275,7 @@ pub fn fps_controller_move(
                 // Shape cast downwards to find ground
                 // Better than a ray cast as it handles when you are near the edge of a surface
                 let filter = QueryFilter::default().exclude_rigid_body(entity);
-                let ground_cast = physics_context.cast_shape(
+                let ground_cast = physics_context.single().cast_shape(
                     transform.translation,
                     transform.rotation,
                     -Vec3::Y,
@@ -400,7 +400,8 @@ pub fn fps_controller_move(
                     // If we can find a surface below us, we can adjust our position to be on top of it
                     let future_position = transform.translation + velocity.linvel * dt;
                     let future_position_lifted = future_position + Vec3::Y * controller.step_offset;
-                    let cast = physics_context.cast_shape(
+                    let rapier_context = physics_context.single();
+                    let cast = rapier_context.cast_shape(
                         future_position_lifted,
                         transform.rotation,
                         -Vec3::Y,
@@ -418,13 +419,14 @@ pub fn fps_controller_move(
 
                 // Prevent falling off ledges
                 if controller.ground_tick >= 1 && input.crouch && !input.jump {
+                    let rapier_context = physics_context.single();
                     for _ in 0..2 {
                         // Find the component of our velocity that is overhanging and subtract it off
                         let overhang = overhang_component(
                             entity,
                             &collider,
                             transform.as_ref(),
-                            &physics_context,
+                            &rapier_context,
                             velocity.linvel,
                             dt,
                         );
@@ -437,7 +439,7 @@ pub fn fps_controller_move(
                         entity,
                         &collider,
                         transform.as_ref(),
-                        &physics_context,
+                        &rapier_context,
                         velocity.linvel,
                         dt,
                     ).is_some()
@@ -489,7 +491,7 @@ fn overhang_component(
     entity: Entity,
     collider: &Collider,
     transform: &Transform,
-    physics_context: &ReadDefaultRapierContext,
+    physics_context: &RapierContext,
     velocity: Vec3,
     dt: f32,
 ) -> Option<Vec3> {
@@ -512,7 +514,7 @@ fn overhang_component(
         let cast = physics_context.cast_ray(
             future_position + Vec3::Y * 0.125,
             -Vec3::Y,
-            0.375,
+            0.375.into(),
             false,
             filter,
         );
